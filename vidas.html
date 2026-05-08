@@ -870,16 +870,9 @@ function buildCharts() {
     <div class="chart-card">
       <div class="chart-title">🏆 TOP 10 — Mais Vidas <span class="chart-sub">${top10Subtitle}</span></div>
       ${top10ctx.length?top10Html:`<div class="empty-msg">Nenhum promotor encontrado</div>`}
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">⚠️ TOP 10 Ofensores — Menos Vidas</div>
-      ${bottom10.length?botHtml:'<div class="empty-msg">Nenhum promotor com vendas</div>'}
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">📅 Zero Vendas <span class="chart-sub">(${zeroList.length} promotores)</span></div>
-      ${zeroList.length?`<ul class="zero-list">${zeroItems}</ul>`:'<div class="empty-msg">🎉 Todos venderam todos os dias!</div>'}
     </div>`;
 }
+
 
 
 var APR_DATA={
