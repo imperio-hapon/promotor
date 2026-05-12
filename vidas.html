@@ -425,15 +425,12 @@ var PROMS = [...new Set(rawData.map(r=>r.p))].sort();
 var filterState = {
   equipe:   new Set(['todos']),
   tipo:     new Set(['todos']),
-  status:   new Set(['todos']),
   promotor: new Set(['todos']),
 };
 var filterDefs = {
   equipe:{label:'Equipe',opts:['todos',...SUP_KEYS],
     lbl:{todos:'Todos','HUMBERTO BANQUERI':'Alfa','LUIZ ROBERTO':'Gladiadores','REBECA MOURA':'Fênix','BENVE':'Benve','JOSY BOMFIM':'Administrativo'},search:false},
   tipo:  {label:'Tipo',  opts:['todos','PF','Adesão','PME'],lbl:{todos:'Todos',PF:'PF',Adesão:'Adesão',PME:'PME'},search:false},
-  status:{label:'Status',opts:['todos','dentro','abaixo','zerado','especial'],
-    lbl:{todos:'Todos',dentro:'No Ritmo',abaixo:'Abaixo',zerado:'Zerado',especial:'Férias/Afastamento'},search:false},
   promotor:{label:'Promotor',opts:['todos',...PROMS],lbl:Object.fromEntries([['todos','Todos'],...PROMS.map(p=>[p,p])]),search:true},
 };
 
@@ -515,7 +512,7 @@ function render(){
   });
   if(supSet) rows=rows.filter(r=>supSet.has(r.s));
   if(!filterState.tipo.has('todos')){const ts=[...filterState.tipo];rows=rows.filter(r=>ts.some(t=>(t==='PF'&&r.pf>0)||(t==='Adesão'&&r.a>0)||(t==='PME'&&r.pme>0)));}
-  if(!filterState.status.has('todos'))rows=rows.filter(r=>[...filterState.status].includes(stKey(r.pct,r.p)));
+  rows=rows.filter(r=>stKey(r.pct,r.p)==='dentro');
   if(!filterState.promotor.has('todos'))rows=rows.filter(r=>[...filterState.promotor].includes(r.p));
   rows.sort((a,b)=>{const va=typeof a[sortCol]==='string'?a[sortCol]:(a[sortCol]??0);const vb=typeof b[sortCol]==='string'?b[sortCol]:(b[sortCol]??0);return typeof va==='string'?sortDir*va.localeCompare(vb):sortDir*(va-vb);});
   const tbody=document.getElementById('tbody');
