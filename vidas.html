@@ -512,7 +512,7 @@ function render(){
   });
   if(supSet) rows=rows.filter(r=>supSet.has(r.s));
   if(!filterState.tipo.has('todos')){const ts=[...filterState.tipo];rows=rows.filter(r=>ts.some(t=>(t==='PF'&&r.pf>0)||(t==='Adesão'&&r.a>0)||(t==='PME'&&r.pme>0)));}
-  rows=rows.filter(r=>stKey(r.pct,r.p)==='dentro');
+  rows=rows.filter(r=>['dentro','abaixo'].includes(stKey(r.pct,r.p)));
   if(!filterState.promotor.has('todos'))rows=rows.filter(r=>[...filterState.promotor].includes(r.p));
   rows.sort((a,b)=>{const va=typeof a[sortCol]==='string'?a[sortCol]:(a[sortCol]??0);const vb=typeof b[sortCol]==='string'?b[sortCol]:(b[sortCol]??0);return typeof va==='string'?sortDir*va.localeCompare(vb):sortDir*(va-vb);});
   const tbody=document.getElementById('tbody');
@@ -1036,7 +1036,7 @@ window.bExportCSV = function(){
   if(!rows || rows.length===0){ alert('Nenhum registro para exportar.'); return; }
   var cols = BCOLS[bCurBase];
   // Header
-  var lines = [cols.map(c=>'"'+c.label+'"').join(';')];
+  var lines = [cols.map(c=>'"'+(c.l||c.label||c.k)+'"').join(';')];
   // Data
   rows.forEach(function(r){
     var line = cols.map(function(c){
