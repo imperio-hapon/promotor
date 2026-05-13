@@ -219,7 +219,7 @@
 
 <script>
 const SB="https://docs.google.com/spreadsheets/d/e/2PACX-1vROvS5snM-Nr6L1KRvAhEVyUyyRx6n2bOo7Lq-ZqEuaOBofFUOWqKAgO7LX-o4aJHJuKTR3olNA9Lsj/pub";
-const ER=["ADM","BENVE","DESLIGADO"];
+const ER=["ADM","DESLIGADO"];
 const MN=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 let RPR=[],RAV=[],NMS_PR=[],NMS_AV=[],MPR={},MAV={};
 let cName="",cTab=0;
@@ -230,7 +230,7 @@ function pcsv(t){const ls=[];let c="",q=false;for(let i=0;i<t.length;i++){const 
 function fd(v){if(!v)return"";const s=v.trim().split(" ")[0];if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;if(/^\d{2}\/\d{2}\/\d{4}$/.test(s)){const[d,m,y]=s.split("/");return y+"-"+m+"-"+d;}return s;}
 function pdtbr(v){if(!v||!v.trim())return null;const s=v.trim();const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);if(m)return new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5],+m[6]);const d=new Date(s);return isNaN(d)?null:d;}
 function h2h(v){if(!v||!v.trim())return 0;const p=v.trim().split(":");if(p.length===3)return(+p[0])+(+p[1])/60+(+p[2])/3600;if(p.length===2)return(+p[0])+(+p[1])/60;return 0;}
-function ns(s){if(!s)return"";const t=s.trim();if(t.startsWith("="))return"DESLIGADO";const u=t.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(u.includes("DESLIGADO"))return"DESLIGADO";if(u==="BENVE")return"REBECA BENVE";return t;}
+function ns(s){if(!s)return"";const t=s.trim();if(t.startsWith("="))return"DESLIGADO";const u=t.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(u.includes("DESLIGADO"))return"DESLIGADO";return t;}
 function gwd(d){const dt=new Date(d+"T12:00:00");const day=dt.getDay();const diff=day===0?-6:1-day;const m=new Date(dt);m.setDate(dt.getDate()+diff);const s=new Date(m);s.setDate(m.getDate()+6);const f=x=>x.toISOString().slice(0,10);return{from:f(m),to:f(s)};}
 function fmt(n){return Math.round(n).toLocaleString("pt-BR");}
 function fmh(h){return h.toFixed(1)+"h";}
