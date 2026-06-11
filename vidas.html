@@ -169,6 +169,17 @@ var DIAS_TRAB = calcDiasTrab(DIAS_UTEIS_MES,MES0,ANO);
 // ===== HELPERS =====
 function norm(s){ return String(s||'').toUpperCase().replace(/\s*-\s*VENDEDOR ADM\s*$/,'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim(); }
 function key2(s){ return norm(s).split(' ').slice(0,2).join(' '); }
+
+// Equivalências de nome: nome COMO VEM NA PLANILHA/SISTEMA  ->  nome canônico (do cadastro)
+// Use quando o "PROMOTOR SISTEMA" difere do "PROMOTOR" oficial.
+var ALIAS = {
+  'ANDREZZA APARECIDA MACHINI':'ANDREZZA MACCHINI'
+  // adicione novos pares aqui: 'NOME NO SISTEMA':'NOME OFICIAL'
+};
+// índice normalizado do ALIAS
+var ALIAS_N = {}; Object.keys(ALIAS).forEach(function(k){ ALIAS_N[norm(k)] = norm(ALIAS[k]); });
+// retorna o nome canônico normalizado (aplica ALIAS se houver)
+function nomeCanonico(s){ var k=norm(s); return ALIAS_N[k] || k; }
 var N = function(n){ return Number(n||0).toLocaleString('pt-BR'); };
 var EQ_LABEL = {'HUMBERTO BANQUERI':'Alfa','LUIZ ROBERTO':'Gladiadores','REBECA MOURA':'Fênix','BENVE':'Benve','JOSY BOMFIM':'Josy'};
 // Categoria separada "Vendedores ADM": quando um deles loga, os rankings comparam APENAS este grupo.
@@ -339,19 +350,30 @@ function rankRow(i,o,valTxt,cls){
 // ===== CLIENTES DO PROMOTOR =====
 function meusClientes(tipo){
   var src = tipo==='pf'?JUN_DATA.rawPF : tipo==='ade'?JUN_DATA.rawADE : JUN_DATA.rawPME;
+  var alvoCanon=nomeCanonico(CURRENT.p);     // nome oficial do logado (canônico)
+  var alvo2=key2(alvoCanon);
   return (src||[]).filter(function(it){
+    var canon=nomeCanonico(it.promotor);     // nome do cliente já resolvido p/ canônico
+    if(canon===alvoCanon) return true;                 // bate pelo nome canônico (cobre ALIAS)
     var k=norm(it.promotor);
-    return k===CUR_KEY || key2(it.promotor)===key2(CURRENT.p);
+    if(k===CUR_KEY) return true;                        // nome exato como digitado
+    if(key2(canon)===alvo2) return true;                // 1º+2º nome iguais
+    // tolerância: um nome é prefixo do outro
+    if(canon && alvoCanon && (canon.indexOf(alvoCanon)===0 || alvoCanon.indexOf(canon)===0)) return true;
+    return false;
   });
 }
+function somaVidas(list){ return list.reduce(function(t,it){ var v=parseInt(it.vidas,10); return t+(isNaN(v)?1:v); },0); }
 function renderTabs(){
-  var pf=meusClientes('pf').length, ade=meusClientes('ade').length, pme=meusClientes('pme').length;
+  var lpf=meusClientes('pf'), lade=meusClientes('ade'), lpme=meusClientes('pme');
+  var vpf=somaVidas(lpf), vade=somaVidas(lade), vpme=somaVidas(lpme);
   document.getElementById('cli-tabs').innerHTML =
-    tabBtn('pf','PF ('+pf+')')+tabBtn('ade','Adesão ('+ade+')')+tabBtn('pme','PME ('+pme+')');
-  document.getElementById('cli-count').textContent='— '+(pf+ade+pme)+' registros no total';
+    tabBtn('pf','PF · '+vpf+' vidas')+tabBtn('ade','Adesão · '+vade+' vidas')+tabBtn('pme','PME · '+vpme+' vidas');
+  var totReg=lpf.length+lade.length+lpme.length, totVidas=vpf+vade+vpme;
+  document.getElementById('cli-count').textContent='— '+totReg+' contratos · '+totVidas+' vidas no total';
 }
-function tabBtn(t,lbl){ return '<div class="cli-tab'+(CLI_TAB===t?' active':'')+'" onclick="CLI_TAB=\''+t+'\';renderTabsActive();renderClientes()">'+lbl+'</div>'; }
-function renderTabsActive(){ document.querySelectorAll('.cli-tab').forEach(function(b){ b.classList.toggle('active', b.textContent.toLowerCase().indexOf(CLI_TAB==='ade'?'adesão':CLI_TAB)===0); }); }
+function tabBtn(t,lbl){ return '<div class="cli-tab'+(CLI_TAB===t?' active':'')+'" data-tab="'+t+'" onclick="CLI_TAB=\''+t+'\';renderTabsActive();renderClientes()">'+lbl+'</div>'; }
+function renderTabsActive(){ document.querySelectorAll('.cli-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===CLI_TAB); }); }
 
 function renderClientes(){
   var q=norm(document.getElementById('cli-search').value);
@@ -394,7 +416,13 @@ function rerender(){
     PROMOS = window.JUN_DATA.rawData.map(function(r){ return {p:r.p, s:r.s, k:norm(r.p), k2:key2(r.p)}; })
       .sort(function(a,b){ return a.p.localeCompare(b.p,'pt-BR'); });
   }
-  _setStatus('✓ Dados atualizados da planilha · '+new Date().toLocaleString('pt-BR'),'ok');
+  // status com contagem do que veio da planilha (confirma que a base atualizou)
+  var nPF=(window._RAW_PF||[]).length, nADE=(window._RAW_ADE||[]).length, nPME=(window._RAW_PME||[]).length;
+  if(nPF+nADE+nPME>0){
+    _setStatus('✓ Base atualizada · '+nPF+' PF, '+nADE+' Adesão, '+nPME+' PME · '+new Date().toLocaleString('pt-BR'),'ok');
+  } else {
+    _setStatus('⚠ Não foi possível ler a planilha (exibindo dados salvos). Verifique a conexão/publicação.','err');
+  }
   // se já estiver logado, re-renderiza o painel com os dados novos
   if(CURRENT){
     var rec=window.JUN_DATA.rawData.find(function(r){return norm(r.p)===CUR_KEY;});
@@ -422,7 +450,10 @@ _setStatus('Carregando dados da planilha…','load');
   function norm(s){ if(s==null)return '';s=String(s).toUpperCase().trim();
     s=s.replace(/\s*-\s*VENDEDOR ADM\s*$/,'');
     s=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    return s.replace(/\s+/g,' ').trim(); }
+    s=s.replace(/\s+/g,' ').trim();
+    // resolve apelidos do sistema -> nome canônico (mapa ALIAS_N do escopo do painel)
+    if(typeof ALIAS_N!=='undefined' && ALIAS_N[s]) s=ALIAS_N[s];
+    return s; }
 
   function parseCSV(text){
     var rows=[],row=[],cur='',q=false,i,c;
