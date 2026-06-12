@@ -134,7 +134,7 @@ tr:hover td{background:#fafbff}
     <div class="rank"><h3 id="rk-vendas-title">🔢 Top 15 · Nº de Vendas (vidas)</h3><div id="rk-vendas"></div></div>
   </div>
 
-  <div class="sec-title"><span id="cli-titulo">👥 Clientes da equipe</span> <span id="cli-count" style="font-size:11px;color:#999;font-weight:600"></span> <span id="cli-diag" onclick="mostrarDiag()" style="font-size:11px;color:#4361ee;font-weight:600;cursor:pointer;margin-left:6px;text-decoration:underline">diagnóstico</span></div>
+  <div class="sec-title"><span id="cli-titulo">👥 Meus Clientes</span> <span id="cli-count" style="font-size:11px;color:#999;font-weight:600"></span> <span id="cli-diag" onclick="mostrarDiag()" style="font-size:11px;color:#4361ee;font-weight:600;cursor:pointer;margin-left:6px;text-decoration:underline">diagnóstico</span></div>
   <div class="cli-wrap">
     <div class="cli-tabs" id="cli-tabs"></div>
     <input class="cli-search" id="cli-search" placeholder="🔎 Buscar cliente, plano, CPF..." oninput="renderClientes()">
@@ -143,7 +143,7 @@ tr:hover td{background:#fafbff}
 
   <div class="foot-note">
     Dados de Junho/2026 · Império Hap-on<br>
-    Os KPIs no topo são os seus números individuais. A lista mostra a base completa da planilha — use a busca para filtrar. Os rankings comparam todos os promotores das 4 equipes.
+    Este painel mostra os seus números e os seus clientes. Os rankings comparam todos os promotores das 4 equipes.
   </div>
 </div>
 
@@ -350,8 +350,23 @@ function rankRow(i,o,valTxt,cls){
 // ===== CLIENTES DO PROMOTOR =====
 function meusClientes(tipo){
   var src = tipo==='pf'?JUN_DATA.rawPF : tipo==='ade'?JUN_DATA.rawADE : JUN_DATA.rawPME;
-  // Mostra TODA a base da planilha, sem filtro. A filtragem fica por conta da busca.
-  return (src||[]).slice();
+  // Mostra SOMENTE os clientes do agente logado (nome como aparece no RANKING).
+  var alvoCanon=nomeCanonico(CURRENT.p), alvo2=key2(alvoCanon), alvoRanking=norm(CURRENT.p);
+  function bate(nomeProm){
+    if(!nomeProm) return false;
+    var canon=nomeCanonico(nomeProm);                 // resolve ALIAS -> padrão do RANKING
+    if(canon===alvoCanon) return true;                 // nome canônico igual
+    if(norm(nomeProm)===alvoRanking) return true;      // igual ao nome exato do login/RANKING
+    if(key2(canon)===alvo2) return true;               // 1º+2º nome iguais
+    if(canon && alvoCanon && (canon.indexOf(alvoCanon)===0 || alvoCanon.indexOf(canon)===0)) return true; // prefixo
+    return false;
+  }
+  return (src||[]).filter(function(it){
+    // testa TODAS as colunas "promotor" do registro (sistema + oficial + variantes)
+    var lista = (it.promotores && it.promotores.length) ? it.promotores : [it.promotor];
+    for(var i=0;i<lista.length;i++){ if(bate(lista[i])) return true; }
+    return false;
+  });
 }
 function somaVidas(list){ return list.reduce(function(t,it){ var v=parseInt(it.vidas,10); return t+(isNaN(v)?1:v); },0); }
 function mostrarDiag(){
@@ -372,11 +387,11 @@ function renderTabs(){
   document.getElementById('cli-tabs').innerHTML =
     tabBtn('pf','PF · '+vpf+' vidas')+tabBtn('ade','Adesão · '+vade+' vidas')+tabBtn('pme','PME · '+vpme+' vidas');
   var totReg=lpf.length+lade.length+lpme.length, totVidas=vpf+vade+vpme;
-  document.getElementById('cli-count').textContent='— '+totReg+' contratos · '+totVidas+' vidas (base completa)';
+  document.getElementById('cli-count').textContent='— '+totReg+' contratos · '+totVidas+' vidas no total';
   // título com o nome da equipe/supervisor do vendedor logado
   var t=document.getElementById('cli-titulo');
   if(t){
-    t.textContent = '👥 Base completa (use a busca para filtrar)';
+    t.textContent = '👥 Meus Clientes';
   }
 }
 function tabBtn(t,lbl){ return '<div class="cli-tab'+(CLI_TAB===t?' active':'')+'" data-tab="'+t+'" onclick="CLI_TAB=\''+t+'\';renderTabsActive();renderClientes()">'+lbl+'</div>'; }
