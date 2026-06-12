@@ -118,6 +118,13 @@ tr:hover td{background:#fafbff}
   <div class="top">
     <div class="hello" id="hello">Olá!<small id="hello-eq"></small></div>
     <div style="display:flex;gap:8px;align-items:center">
+      <select id="mes-sel" onchange="setMes(this.value)" style="padding:7px 10px;border:2px solid #4361ee;border-radius:8px;font-size:13px;color:#4361ee;font-weight:600;background:#fff;cursor:pointer;outline:none">
+        <option value="0">Todos os meses</option>
+        <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+        <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+        <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+        <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+      </select>
       <button class="btn-sair" id="btn-atualizar" onclick="window.atualizarDaPlanilha&&window.atualizarDaPlanilha()" style="border-color:#4361ee;color:#4361ee">↻ Atualizar</button>
       <button class="btn-sair" onclick="sair()">↩ Trocar de vendedor</button>
     </div>
@@ -193,6 +200,7 @@ function statusOk(st){ var x=norm(st); if(!x)return false; return x.indexOf('APR
 var CURRENT=null;        // registro rawData do promotor logado
 var CUR_KEY=null;        // norm() do nome do promotor logado
 var CLI_TAB='pf';
+var MES_SEL=6;           // mês selecionado no filtro (6=junho por padrão; 0=todos)
 
 // ===== LOGIN: sugestão por nome (busca aproximada) =====
 var PROMOS = JUN_DATA.rawData.map(function(r){ return {p:r.p, s:r.s, k:norm(r.p), k2:key2(r.p)}; })
@@ -222,6 +230,7 @@ function entrar(k){
   var rec=JUN_DATA.rawData.find(function(r){return norm(r.p)===k;});
   if(!rec){ document.getElementById('login-err').textContent='Nome não encontrado.'; return; }
   CURRENT=rec; CUR_KEY=k;
+  CLI_TAB='pf'; MES_SEL=6;   // padrão ao entrar: aba PF, mês de junho
   document.getElementById('login').classList.add('hidden');
   document.getElementById('painel').classList.remove('hidden');
   window.scrollTo(0,0);
@@ -254,14 +263,15 @@ function setDU(v){
 
 
 // ===== RENDER PRINCIPAL =====
+function setMes(v){ MES_SEL=parseInt(v,10)||0; renderTudo(); }
 function renderTudo(){
   document.getElementById('du-input').value=DIAS_UTEIS_MES;
+  var ms=document.getElementById('mes-sel'); if(ms) ms.value=String(MES_SEL);
   renderHeader();
   renderKPIs();
   renderProgresso();
   renderRankings();
   renderTabs();
-  CLI_TAB='pf';
   renderClientes();
 }
 
@@ -272,18 +282,29 @@ function renderHeader(){
   document.getElementById('updated').textContent=(JUN_DATA.headerDate||'Junho/2026')+' · '+DIAS_TRAB+' de '+DIAS_UTEIS_MES+' dias úteis decorridos';
 }
 
+function vidasDoMes(){
+  // soma de vidas do agente, por tipo, respeitando o mês selecionado (MES_SEL)
+  var pf=somaVidas(meusClientes('pf')), a=somaVidas(meusClientes('ade')), pme=somaVidas(meusClientes('pme'));
+  return {pf:pf, a:a, pme:pme, v:pf+a+pme};
+}
 function renderKPIs(){
   var r=CURRENT;
   var meta=metaIndividual(r);
-  var pct = meta>0 ? +(r.v/meta*100).toFixed(1) : 0;
-  var conv = (r.cv!=null) ? r.cv : (r.leads>0 ? +(r.v/r.leads*100).toFixed(2) : 0);
-  var proj = DIAS_TRAB>0 ? Math.round(r.v * DIAS_UTEIS_MES / DIAS_TRAB) : r.v;
+  // vidas recalculadas a partir da base de clientes do mês selecionado
+  var vm=vidasDoMes();
+  var vidas=vm.v, vpf=vm.pf, va=vm.a, vpme=vm.pme;
+  var ehJunho=(MES_SEL===6||MES_SEL===0);
+  var pct = meta>0 ? +(vidas/meta*100).toFixed(1) : 0;
+  // leads/conversão só existem no RANKING (junho); para outros meses, conversão usa as vidas do mês ÷ leads de junho não faz sentido -> mostra '—'
+  var leads = r.leads||0;
+  var conv = ehJunho ? ((r.cv!=null) ? r.cv : (leads>0 ? +(vidas/leads*100).toFixed(2) : 0)) : null;
+  var proj = DIAS_TRAB>0 ? Math.round(vidas * DIAS_UTEIS_MES / DIAS_TRAB) : vidas;
   var html='';
-  html+=card('azul','Minhas Vidas',N(r.v),(r.pf||0)+' PF · '+(r.a||0)+' Adesão · '+(r.pme||0)+' PME');
+  html+=card('azul','Minhas Vidas',N(vidas),vpf+' PF · '+va+' Adesão · '+vpme+' PME');
   html+=card('cinza','Minha Meta', meta>0?N(meta):'—', meta>0?(pct+'% atingido'):'sem meta definida');
   html+=card('laranja','Projeção Fechamento',N(proj), meta>0?(+(proj/meta*100).toFixed(0)+'% da meta no ritmo'):'no ritmo atual');
-  html+=card('azulc','Meus Leads',N(r.leads),'recebidos no período');
-  html+=card('roxo','Minha Conversão',conv.toFixed(2)+'%', 'vidas ÷ leads');
+  html+=card('azulc','Meus Leads', ehJunho?N(leads):'—', ehJunho?'recebidos no período':'leads só disponíveis em junho');
+  html+=card('roxo','Minha Conversão', conv!=null?(conv.toFixed(2)+'%'):'—', ehJunho?'vidas ÷ leads':'conversão só em junho');
   document.getElementById('kpis').innerHTML=html;
 }
 function card(cls,lbl,val,sub){
@@ -292,11 +313,12 @@ function card(cls,lbl,val,sub){
 
 function renderProgresso(){
   var r=CURRENT, meta=metaIndividual(r);
-  var pct = meta>0 ? +(r.v/meta*100).toFixed(1) : 0;
+  var vidas=vidasDoMes().v;
+  var pct = meta>0 ? +(vidas/meta*100).toFixed(1) : 0;
   var espPct = DIAS_UTEIS_MES>0 ? +(DIAS_TRAB/DIAS_UTEIS_MES*100).toFixed(1) : 0;
   var metaHoje = meta>0 ? Math.round(meta*DIAS_TRAB/DIAS_UTEIS_MES) : 0;
-  var pctHoje = metaHoje>0 ? +(r.v/metaHoje*100).toFixed(0) : 0;
-  var noRitmo = metaHoje>0 && r.v>=metaHoje;
+  var pctHoje = metaHoje>0 ? +(vidas/metaHoje*100).toFixed(0) : 0;
+  var noRitmo = metaHoje>0 && vidas>=metaHoje;
   var barW=Math.min(pct,100), expPos=Math.min(espPct,100);
   var c=document.getElementById('prog-card');
   if(meta<=0){ c.innerHTML='<div class="prog-head"><span class="t">Progresso da meta</span></div><div style="font-size:12.5px;color:#999">Meta individual não definida para este mês.</div>'; return; }
@@ -304,7 +326,7 @@ function renderProgresso(){
     '<div class="prog-head"><span class="t">Progresso da minha meta</span><span class="pct">'+pct+'%</span></div>'+
     '<div class="bar"><div class="fill" style="width:'+barW+'%"></div><div class="exp" style="left:'+expPos+'%" title="ritmo esperado"></div></div>'+
     '<div class="prog-foot">'+
-      '<span>Realizado: <strong style="color:#4361ee">'+N(r.v)+'</strong> de '+N(meta)+' vidas</span>'+
+      '<span>Realizado: <strong style="color:#4361ee">'+N(vidas)+'</strong> de '+N(meta)+' vidas</span>'+
       '<span>🎯 Meta até hoje: <strong>'+N(metaHoje)+'</strong> ('+pctHoje+'% atingido) '+(noRitmo?'✅ no ritmo':'🔴 abaixo')+'</span>'+
     '</div>';
 }
@@ -362,6 +384,8 @@ function meusClientes(tipo){
     return false;
   }
   return (src||[]).filter(function(it){
+    // filtro de mês (MES_SEL=0 => todos os meses)
+    if(MES_SEL && it.mes!=null && it.mes!==0 && it.mes!==MES_SEL) return false;
     // testa TODAS as colunas "promotor" do registro (sistema + oficial + variantes)
     var lista = (it.promotores && it.promotores.length) ? it.promotores : [it.promotor];
     for(var i=0;i<lista.length;i++){ if(bate(lista[i])) return true; }
@@ -610,7 +634,7 @@ _setStatus('Carregando dados da planilha…','load');
           pl=col(H,['NOME_PLANO']); if(pl<0)pl=col(H,['NM_PLANO']); if(pl<0)pl=col(H,['PLANO']);
       var st=col(H,['STATUS OBRIGACAO','STATUS_OBRIGACAO','STATUS']);
       for(i=1;i<rows.length;i++){ var r=rows[i]; if(!r||!r.join('').trim())continue;
-        out.push({supervisor:(r[iSup]||'').trim(),promotor:(iProm>=0?(r[iProm]||'').trim():''),promotores:promsDe(r),supervisores:supsDe(r),
+        out.push({supervisor:(r[iSup]||'').trim(),promotor:(iProm>=0?(r[iProm]||'').trim():''),promotores:promsDe(r),supervisores:supsDe(r),mes:(iMes>=0?num(r[iMes]):null),
           controle:c>=0?(r[c]||'').trim():'',cpf:cp>=0?(r[cp]||'').trim():'',
           nome:nm>=0?(r[nm]||'').trim():'',vidas:vd>=0?num(r[vd]):1,
           celular:cel>=0?(r[cel]||'').trim():'',plano:pl>=0?(r[pl]||'').trim():'',
@@ -620,7 +644,7 @@ _setStatus('Carregando dados da planilha…','load');
           ms=col(H,['VL_MENSALIDADE']),pl2=col(H,['NM_PLANO','PLANO']),
           dt2=col(H,['DT_CADASTRAMENTO','DT_ADMISSAO','DATA']),si=col(H,['SITUACAO_USU','SITUACAO']);
       for(i=1;i<rows.length;i++){ var r2=rows[i]; if(!r2||!r2.join('').trim())continue;
-        out.push({supervisor:(r2[iSup]||'').trim(),promotor:(iProm>=0?(r2[iProm]||'').trim():''),promotores:promsDe(r2),supervisores:supsDe(r2),
+        out.push({supervisor:(r2[iSup]||'').trim(),promotor:(iProm>=0?(r2[iProm]||'').trim():''),promotores:promsDe(r2),supervisores:supsDe(r2),mes:(iMes>=0?num(r2[iMes]):null),
           cpf:cp2>=0?(r2[cp2]||'').trim():'',nome:nm2>=0?(r2[nm2]||'').trim():'',
           tp_usuario:tp>=0?(r2[tp]||'').trim():'',mensalidade:ms>=0?(r2[ms]||'').trim():'',
           plano:pl2>=0?(r2[pl2]||'').trim():'',data:fmtData(dt2>=0?r2[dt2]:''),
@@ -632,7 +656,7 @@ _setStatus('Carregando dados da planilha…','load');
       window._DIAG_PME = { total:rows.length-1, aceitos:0 };
       for(i=1;i<rows.length;i++){ var r3=rows[i]; if(!r3||!r3.join('').trim())continue;
         window._DIAG_PME.aceitos++;
-        out.push({supervisor:(r3[iSup]||'').trim(),promotor:(iProm>=0?(r3[iProm]||'').trim():''),promotores:promsDe(r3),supervisores:supsDe(r3),
+        out.push({supervisor:(r3[iSup]||'').trim(),promotor:(iProm>=0?(r3[iProm]||'').trim():''),promotores:promsDe(r3),supervisores:supsDe(r3),mes:(iMes>=0?num(r3[iMes]):null),
           codigo:cd>=0?(r3[cd]||'').trim():'',empresa:em>=0?(r3[em]||'').trim():'',
           fone:fo>=0?String(r3[fo]||'').replace(/\.0+$/,'').trim():'',vidas:qt>=0?num(r3[qt]):1,
           fatura:fa>=0?(r3[fa]||'').trim():'',data:fmtData(dt3>=0?r3[dt3]:''),
