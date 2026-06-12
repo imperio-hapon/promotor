@@ -134,7 +134,7 @@ tr:hover td{background:#fafbff}
     <div class="rank"><h3 id="rk-vendas-title">🔢 Top 15 · Nº de Vendas (vidas)</h3><div id="rk-vendas"></div></div>
   </div>
 
-  <div class="sec-title">👥 Meus Clientes <span id="cli-count" style="font-size:11px;color:#999;font-weight:600"></span></div>
+  <div class="sec-title">👥 Meus Clientes <span id="cli-count" style="font-size:11px;color:#999;font-weight:600"></span> <span id="cli-diag" onclick="mostrarDiag()" style="font-size:11px;color:#4361ee;font-weight:600;cursor:pointer;margin-left:6px;text-decoration:underline">diagnóstico</span></div>
   <div class="cli-wrap">
     <div class="cli-tabs" id="cli-tabs"></div>
     <input class="cli-search" id="cli-search" placeholder="🔎 Buscar cliente, plano, CPF..." oninput="renderClientes()">
@@ -372,6 +372,28 @@ function meusClientes(tipo){
   });
 }
 function somaVidas(list){ return list.reduce(function(t,it){ var v=parseInt(it.vidas,10); return t+(isNaN(v)?1:v); },0); }
+function mostrarDiag(){
+  var d=window._DIAG_PME;
+  var meu=meusClientes('pme');
+  var msg='DIAGNÓSTICO DA BASE PME\n\n';
+  msg+='Vendedor logado: '+(CURRENT?CURRENT.p:'—')+'\n';
+  msg+='Contratos PME atribuídos a você: '+meu.length+'\n\n';
+  if(d){
+    msg+='Na planilha (aba PME):\n';
+    msg+='• Linhas totais lidas: '+d.total+'\n';
+    msg+='• Com algum promotor preenchido: '+d.comProm+'\n';
+    msg+='• Aceitas (equipe ok + mês ok): '+d.aceitos+'\n';
+    msg+='• Descartadas por equipe não reconhecida: '+d.semEquipe+'\n';
+    msg+='• Descartadas por mês fora de junho: '+d.mesForaAlvo+'\n';
+    if(d.amostraDescartes && d.amostraDescartes.length){
+      msg+='\nExemplos de linhas descartadas:\n';
+      d.amostraDescartes.forEach(function(x){ msg+='  - '+x.emp+' | promotor: '+x.prom+' | sup: '+x.sups+' | mês: '+x.mes+' → '+x.motivo+'\n'; });
+    }
+  } else {
+    msg+='Ainda não há diagnóstico — clique em "↻ Atualizar" para carregar a planilha.';
+  }
+  alert(msg);
+}
 function renderTabs(){
   var lpf=meusClientes('pf'), lade=meusClientes('ade'), lpme=meusClientes('pme');
   var vpf=somaVidas(lpf), vade=somaVidas(lade), vpme=somaVidas(lpme);
@@ -571,8 +593,11 @@ _setStatus('Carregando dados da planilha…','load');
     var H=rows[0];
     var iSup=col(H,['SUPERVISOR']),iProm=col(H,['PROMOTOR']),iMes=col(H,['MES']);
     var promCols=colsAll(H,'PROMOTOR');           // TODAS as colunas com "promotor" (sistema + oficial)
+    var supCols=colsAll(H,'SUPERVISOR');          // TODAS as colunas com "supervisor"
     var out=[],i;
-    function mes_ok(row){ if(!equipeOk(row[iSup]))return false; if(iMes<0)return true; var m=num(row[iMes]); return m===0||m===MES_ALVO; }
+    // equipe ok se QUALQUER coluna de supervisor for de uma das 4 equipes
+    function equipeRow(row){ for(var j=0;j<supCols.length;j++){ if(equipeOk(row[supCols[j]])) return true; } return false; }
+    function mes_ok(row){ if(!equipeRow(row))return false; if(iMes<0)return true; var m=num(row[iMes]); return m===0||m===MES_ALVO; }
     // coleta os nomes de promotor de todas as colunas "promotor" de uma linha (não-vazios)
     function promsDe(row){ var a=[]; for(var j=0;j<promCols.length;j++){ var v=(row[promCols[j]]||'').trim(); if(v)a.push(v); } return a; }
     // tem ao menos um nome de promotor preenchido?
@@ -602,12 +627,27 @@ _setStatus('Carregando dados da planilha…','load');
       var cd=col(H,['CODIGO']),em=col(H,['NM FANTASIA','NOME']),fo=col(H,['FONE']),
           qt=col(H,['QT.USU','QT USU','QTDE','VIDAS']),fa=col(H,['VL.FATURA','VL FATURA','FATURA']),
           dt3=col(H,['DT.VALID','DT VALID','DATA']),st3=col(H,['STATUS']);
-      for(i=1;i<rows.length;i++){ var r3=rows[i]; if(!r3||!temProm(r3)||!mes_ok(r3))continue;
+      window._DIAG_PME = { total:rows.length-1, comProm:0, semEquipe:0, mesForaAlvo:0, aceitos:0, amostraDescartes:[] };
+      for(i=1;i<rows.length;i++){ var r3=rows[i]; if(!r3)continue;
+        // ---- diagnóstico: por que uma linha com promotor não entra ----
+        if(temProm(r3)){ window._DIAG_PME.comProm++;
+          var okEq=equipeRow(r3), mVal=(iMes>=0?num(r3[iMes]):MES_ALVO), okM=(iMes<0||mVal===0||mVal===MES_ALVO);
+          if(!okEq||!okM){
+            if(!okEq) window._DIAG_PME.semEquipe++;
+            else if(!okM) window._DIAG_PME.mesForaAlvo++;
+            if(window._DIAG_PME.amostraDescartes.length<8)
+              window._DIAG_PME.amostraDescartes.push({ emp:(em>=0?(r3[em]||''):'').slice(0,40), prom:promsDe(r3).join(' | '),
+                sups:supCols.map(function(c){return r3[c]||'';}).join(' / '), mes:mVal, motivo:(!okEq?'equipe não reconhecida':'mês fora do alvo') });
+          }
+        }
+        if(!temProm(r3)||!mes_ok(r3))continue;
+        window._DIAG_PME.aceitos++;
         out.push({supervisor:(r3[iSup]||'').trim(),promotor:(iProm>=0?(r3[iProm]||'').trim():''),promotores:promsDe(r3),
           codigo:cd>=0?(r3[cd]||'').trim():'',empresa:em>=0?(r3[em]||'').trim():'',
           fone:fo>=0?String(r3[fo]||'').replace(/\.0+$/,'').trim():'',vidas:qt>=0?num(r3[qt]):1,
           fatura:fa>=0?(r3[fa]||'').trim():'',data:fmtData(dt3>=0?r3[dt3]:''),
           status:st3>=0?(r3[st3]||'').trim():''}); }
+      if(window.console) console.log('[DIAG PME]', JSON.stringify(window._DIAG_PME));
     }
     return out;
   }
