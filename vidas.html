@@ -290,21 +290,26 @@ function vidasDoMes(){
 function renderKPIs(){
   var r=CURRENT;
   var meta=metaIndividual(r);
+  var metaDes=(r.metaDesafio!=null&&r.metaDesafio>0)?r.metaDesafio:0;
   // vidas recalculadas a partir da base de clientes do mês selecionado
   var vm=vidasDoMes();
   var vidas=vm.v, vpf=vm.pf, va=vm.a, vpme=vm.pme;
   var ehJunho=(MES_SEL===6||MES_SEL===0);
   var pct = meta>0 ? +(vidas/meta*100).toFixed(1) : 0;
-  // leads/conversão só existem no RANKING (junho); para outros meses, conversão usa as vidas do mês ÷ leads de junho não faz sentido -> mostra '—'
+  var pctDes = metaDes>0 ? +(vidas/metaDes*100).toFixed(1) : 0;
   var leads = r.leads||0;
-  var conv = ehJunho ? ((r.cv!=null) ? r.cv : (leads>0 ? +(vidas/leads*100).toFixed(2) : 0)) : null;
+  // CONVERSÃO: vem direto da coluna CONVERSÃO do ranking (r.cv). Só existe no ranking (junho).
+  var conv = ehJunho ? (r.cv!=null ? r.cv : null) : null;
   var proj = DIAS_TRAB>0 ? Math.round(vidas * DIAS_UTEIS_MES / DIAS_TRAB) : vidas;
+  // subtexto da meta: % atingido + meta desafio quando houver
+  var metaSub = meta>0 ? (pct+'% atingido') : 'sem meta definida';
+  if(metaDes>0) metaSub += ' · 🏆 Desafio: '+N(metaDes)+' ('+pctDes+'%)';
   var html='';
   html+=card('azul','Minhas Vidas',N(vidas),vpf+' PF · '+va+' Adesão · '+vpme+' PME');
-  html+=card('cinza','Minha Meta', meta>0?N(meta):'—', meta>0?(pct+'% atingido'):'sem meta definida');
+  html+=card('cinza','Minha Meta', meta>0?N(meta):'—', metaSub);
   html+=card('laranja','Projeção Fechamento',N(proj), meta>0?(+(proj/meta*100).toFixed(0)+'% da meta no ritmo'):'no ritmo atual');
   html+=card('azulc','Meus Leads', ehJunho?N(leads):'—', ehJunho?'recebidos no período':'leads só disponíveis em junho');
-  html+=card('roxo','Minha Conversão', conv!=null?(conv.toFixed(2)+'%'):'—', ehJunho?'vidas ÷ leads':'conversão só em junho');
+  html+=card('roxo','Minha Conversão', conv!=null?(conv.toFixed(2)+'%'):'—', ehJunho?'da coluna Conversão':'conversão só em junho');
   document.getElementById('kpis').innerHTML=html;
 }
 function card(cls,lbl,val,sub){
@@ -533,6 +538,9 @@ _setStatus('Carregando dados da planilha…','load');
   function colsAll(H,kw){ var idx=[]; kw=norm(kw); for(var i=0;i<H.length;i++){ if(norm(H[i]).indexOf(kw)>=0) idx.push(i); } return idx; }
   function num(x){ if(x==null)return 0; var s=String(x).trim().replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.');
     var n=parseFloat(s); return isNaN(n)?0:Math.round(n); }
+  // versão decimal (não arredonda) — para conversão/percentuais
+  function numF(x){ if(x==null||x==='')return null; var s=String(x).trim().replace('%','').replace(/\s/g,'').replace(',','.');
+    var n=parseFloat(s); return isNaN(n)?null:n; }
   var EQUIPES=['HUMBERTO BANQUERI','LUIZ ROBERTO','REBECA MOURA','BENVE'];
   function equipeOk(sup){ return EQUIPES.indexOf(norm(sup))>=0; }
   // chave aproximada: 1º + 2º nome (para casar nome longo da aba com nome curto do RANKING)
@@ -561,7 +569,11 @@ _setStatus('Carregando dados da planilha…','load');
         iPF=col(H,['VIDAS PF']),iAD=col(H,['VIDAS ADE','ADESAO','ADESÃO']),
         iPM=col(H,['VIDAS PME']),iTOT=col(H,['VIDAS TOT','TOTAIS']),
         iMeta=col(H,['META']),iLeads=col(H,['LEADS']),
+        iMetaDes=col(H,['META DESAFIO','DESAFIO']),
+        iConv=col(H,['CONVERSAO','CONVERSÃO','CONVERS ','% CONVERSAO','% CONV','CONV']),
         iDZ=col(H,['DIAS ZERADOS','DIAS ZERO','D.UTEIS S/ VENDER','D.ÚTEIS S/ VENDER','DIAS S/ VENDER','DIAS SEM VENDA','DIAS SEM VENDER']);
+    // 'META' por substring poderia capturar 'META DESAFIO'; se caiu na mesma coluna, zera iMeta-desafio do meta normal
+    if(iMeta>=0 && iMeta===iMetaDes){ /* nomes iguais não devem coincidir; mantém ambos */ }
     if(iProm<0)return;
     var byKey={}; window.JUN_DATA.rawData.forEach(function(r){ byKey[norm(r.p)]=r; });
     var supFF='', totPF=0,totA=0,totPME=0,totV=0,totMeta=0, found={}, metaSup={};
@@ -574,12 +586,16 @@ _setStatus('Carregando dados da planilha…','load');
       var pf=iPF>=0?num(row[iPF]):0, ad=iAD>=0?num(row[iAD]):0,
           pm=iPM>=0?num(row[iPM]):0, tot=iTOT>=0?num(row[iTOT]):(pf+ad+pm);
       var metaV=iMeta>=0?num(row[iMeta]):null, leadsV=iLeads>=0?num(row[iLeads]):null;
+      var metaDesV=iMetaDes>=0?num(row[iMetaDes]):null;
+      var convV=iConv>=0?numF(row[iConv]):null;
       var dzV=iDZ>=0?num(row[iDZ]):null;
       var key=norm(prom), rec=byKey[key];
       if(rec){ rec.pf=pf;rec.a=ad;rec.pme=pm;rec.v=tot;
                if(metaV!==null)rec.meta=metaV; if(leadsV!==null)rec.leads=leadsV;
+               if(metaDesV!==null)rec.metaDesafio=metaDesV; if(convV!==null)rec.cv=convV;
                if(dzV!==null)rec.dz=dzV; found[key]=1; }
-      else { rec={s:supFF,p:prom,pf:pf,a:ad,pme:pm,v:tot,meta:metaV||0,leads:leadsV||0,dz:dzV||0,cv:null};
+      else { rec={s:supFF,p:prom,pf:pf,a:ad,pme:pm,v:tot,meta:metaV||0,leads:leadsV||0,dz:dzV||0,
+                  metaDesafio:(metaDesV!==null?metaDesV:0),cv:(convV!==null?convV:null)};
              window.JUN_DATA.rawData.push(rec); byKey[key]=rec; found[key]=1; }
       totPF+=pf;totA+=ad;totPME+=pm;totV+=tot;
       if(metaV!==null){ totMeta+=metaV; var sk=supFF; metaSup[sk]=(metaSup[sk]||0)+metaV; }
