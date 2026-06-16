@@ -297,10 +297,15 @@ function renderKPIs(){
   var meta=metaPrincipal(r);                 // PRINCIPAL = META DESAFIO
   var metaRank=metaIndividual(r);            // secundária = META RANKING
   var metaDes=(r.metaDesafio!=null&&r.metaDesafio>0)?r.metaDesafio:0;
-  // vidas recalculadas a partir da base de clientes do mês selecionado
-  var vm=vidasDoMes();
-  var vidas=vm.v, vpf=vm.pf, va=vm.a, vpme=vm.pme;
   var ehJunho=(MES_SEL===6||MES_SEL===0);
+  // VIDAS: em junho usa o RANKING (VIDAS TOTAIS, mesma fonte do ranking). Em outros meses, recalcula pela base.
+  var vidas, vpf, va, vpme;
+  if(ehJunho){
+    vidas=r.v||0; vpf=r.pf||0; va=r.a||0; vpme=r.pme||0;
+  } else {
+    var vm=vidasDoMes();
+    vidas=vm.v; vpf=vm.pf; va=vm.a; vpme=vm.pme;
+  }
   var pct = meta>0 ? +(vidas/meta*100).toFixed(1) : 0;
   var leads = r.leads||0;
   // CONVERSÃO: vem direto da coluna CONVERSÃO do ranking (r.cv). Só existe no ranking (junho).
@@ -323,7 +328,8 @@ function card(cls,lbl,val,sub){
 
 function renderProgresso(){
   var r=CURRENT, meta=metaPrincipal(r);   // barra usa a META DESAFIO
-  var vidas=vidasDoMes().v;
+  var ehJunho=(MES_SEL===6||MES_SEL===0);
+  var vidas=ehJunho ? (r.v||0) : vidasDoMes().v;   // junho: RANKING; outros meses: base
   var pct = meta>0 ? +(vidas/meta*100).toFixed(1) : 0;
   var espPct = DIAS_UTEIS_MES>0 ? +(DIAS_TRAB/DIAS_UTEIS_MES*100).toFixed(1) : 0;
   var metaHoje = meta>0 ? Math.round(meta*DIAS_TRAB/DIAS_UTEIS_MES) : 0;
