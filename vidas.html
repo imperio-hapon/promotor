@@ -246,11 +246,16 @@ function sair(){
 
 // ===== META INDIVIDUAL (rateio da meta da equipe pelos promotores ativos) =====
 function metaIndividual(rec){
-  if(rec.meta && rec.meta>0) return rec.meta;                 // se houver meta própria, usa
+  if(rec.meta && rec.meta>0) return rec.meta;                 // META RANKING (meta individual)
   var metaEq=(JUN_DATA.meta_sup&&JUN_DATA.meta_sup[rec.s])||0;
   if(!metaEq) return 0;
   var nEq=JUN_DATA.rawData.filter(function(r){return r.s===rec.s;}).length || 1;
   return Math.round(metaEq/nEq);
+}
+// meta PRINCIPAL do painel = META DESAFIO (cai para a meta ranking se não houver desafio)
+function metaPrincipal(rec){
+  if(rec.metaDesafio && rec.metaDesafio>0) return rec.metaDesafio;
+  return metaIndividual(rec);
 }
 
 // ===== DIAS ÚTEIS (campo editável) =====
@@ -289,25 +294,25 @@ function vidasDoMes(){
 }
 function renderKPIs(){
   var r=CURRENT;
-  var meta=metaIndividual(r);
+  var meta=metaPrincipal(r);                 // PRINCIPAL = META DESAFIO
+  var metaRank=metaIndividual(r);            // secundária = META RANKING
   var metaDes=(r.metaDesafio!=null&&r.metaDesafio>0)?r.metaDesafio:0;
   // vidas recalculadas a partir da base de clientes do mês selecionado
   var vm=vidasDoMes();
   var vidas=vm.v, vpf=vm.pf, va=vm.a, vpme=vm.pme;
   var ehJunho=(MES_SEL===6||MES_SEL===0);
   var pct = meta>0 ? +(vidas/meta*100).toFixed(1) : 0;
-  var pctDes = metaDes>0 ? +(vidas/metaDes*100).toFixed(1) : 0;
   var leads = r.leads||0;
   // CONVERSÃO: vem direto da coluna CONVERSÃO do ranking (r.cv). Só existe no ranking (junho).
   var conv = ehJunho ? (r.cv!=null ? r.cv : null) : null;
   var proj = DIAS_TRAB>0 ? Math.round(vidas * DIAS_UTEIS_MES / DIAS_TRAB) : vidas;
-  // subtexto da meta: % atingido + meta desafio quando houver
-  var metaSub = meta>0 ? (pct+'% atingido') : 'sem meta definida';
-  if(metaDes>0) metaSub += ' · 🏆 Desafio: '+N(metaDes)+' ('+pctDes+'%)';
+  // subtexto da meta: % do desafio + meta ranking como referência
+  var metaSub = meta>0 ? (pct+'% do desafio') : 'sem meta definida';
+  if(metaRank>0 && metaRank!==meta) metaSub += ' · Meta ranking: '+N(metaRank);
   var html='';
   html+=card('azul','Minhas Vidas',N(vidas),vpf+' PF · '+va+' Adesão · '+vpme+' PME');
-  html+=card('cinza','Minha Meta', meta>0?N(meta):'—', metaSub);
-  html+=card('laranja','Projeção Fechamento',N(proj), meta>0?(+(proj/meta*100).toFixed(0)+'% da meta no ritmo'):'no ritmo atual');
+  html+=card('cinza','Meta Desafio', meta>0?N(meta):'—', metaSub);
+  html+=card('laranja','Projeção Fechamento',N(proj), meta>0?(+(proj/meta*100).toFixed(0)+'% do desafio no ritmo'):'no ritmo atual');
   html+=card('azulc','Meus Leads', ehJunho?N(leads):'—', ehJunho?'recebidos no período':'leads só disponíveis em junho');
   html+=card('roxo','Minha Conversão', conv!=null?(conv.toFixed(2)+'%'):'—', ehJunho?'da coluna Conversão':'conversão só em junho');
   document.getElementById('kpis').innerHTML=html;
@@ -317,7 +322,7 @@ function card(cls,lbl,val,sub){
 }
 
 function renderProgresso(){
-  var r=CURRENT, meta=metaIndividual(r);
+  var r=CURRENT, meta=metaPrincipal(r);   // barra usa a META DESAFIO
   var vidas=vidasDoMes().v;
   var pct = meta>0 ? +(vidas/meta*100).toFixed(1) : 0;
   var espPct = DIAS_UTEIS_MES>0 ? +(DIAS_TRAB/DIAS_UTEIS_MES*100).toFixed(1) : 0;
@@ -328,11 +333,11 @@ function renderProgresso(){
   var c=document.getElementById('prog-card');
   if(meta<=0){ c.innerHTML='<div class="prog-head"><span class="t">Progresso da meta</span></div><div style="font-size:12.5px;color:#999">Meta individual não definida para este mês.</div>'; return; }
   c.innerHTML =
-    '<div class="prog-head"><span class="t">Progresso da minha meta</span><span class="pct">'+pct+'%</span></div>'+
+    '<div class="prog-head"><span class="t">Progresso da meta desafio</span><span class="pct">'+pct+'%</span></div>'+
     '<div class="bar"><div class="fill" style="width:'+barW+'%"></div><div class="exp" style="left:'+expPos+'%" title="ritmo esperado"></div></div>'+
     '<div class="prog-foot">'+
-      '<span>Realizado: <strong style="color:#4361ee">'+N(vidas)+'</strong> de '+N(meta)+' vidas</span>'+
-      '<span>🎯 Meta até hoje: <strong>'+N(metaHoje)+'</strong> ('+pctHoje+'% atingido) '+(noRitmo?'✅ no ritmo':'🔴 abaixo')+'</span>'+
+      '<span>Realizado: <strong style="color:#4361ee">'+N(vidas)+'</strong> de '+N(meta)+' (desafio)</span>'+
+      '<span>🎯 Desafio até hoje: <strong>'+N(metaHoje)+'</strong> ('+pctHoje+'% atingido) '+(noRitmo?'✅ no ritmo':'🔴 abaixo')+'</span>'+
     '</div>';
 }
 
@@ -568,12 +573,18 @@ _setStatus('Carregando dados da planilha…','load');
     var iSup=col(H,['SUPERVISOR']),iProm=col(H,['PROMOTOR']),
         iPF=col(H,['VIDAS PF']),iAD=col(H,['VIDAS ADE','ADESAO','ADESÃO']),
         iPM=col(H,['VIDAS PME']),iTOT=col(H,['VIDAS TOT','TOTAIS']),
-        iMeta=col(H,['META']),iLeads=col(H,['LEADS']),
-        iMetaDes=col(H,['META DESAFIO','DESAFIO']),
-        iConv=col(H,['CONVERSAO','CONVERSÃO','CONVERS ','% CONVERSAO','% CONV','CONV']),
+        iLeads=col(H,['LEADS']),
         iDZ=col(H,['DIAS ZERADOS','DIAS ZERO','D.UTEIS S/ VENDER','D.ÚTEIS S/ VENDER','DIAS S/ VENDER','DIAS SEM VENDA','DIAS SEM VENDER']);
-    // 'META' por substring poderia capturar 'META DESAFIO'; se caiu na mesma coluna, zera iMeta-desafio do meta normal
-    if(iMeta>=0 && iMeta===iMetaDes){ /* nomes iguais não devem coincidir; mantém ambos */ }
+    // Estrutura real do ranking (mesma do painel do supervisor):
+    //  META RANKING (col G) = meta individual do promotor; META DESAFIO (col H) = desafio; CONVERSÃO = % conv.
+    function colExato(H, must){ for(var i=0;i<H.length;i++){ var h=norm(H[i]); var ok=true;
+        for(var w=0;w<must.length;w++){ if(h.indexOf(must[w])<0){ ok=false; break; } }
+        if(ok) return i; } return -1; }
+    var iMetaDes=colExato(H,['META','DESAFIO']);
+    var iMeta=colExato(H,['META','RANKING']);           // meta individual = META RANKING
+    if(iMeta<0){ for(var _im=0;_im<H.length;_im++){ var _h=norm(H[_im]);
+      if(_h.indexOf('META')>=0 && _h.indexOf('DESAFIO')<0){ iMeta=_im; break; } } }
+    var iConv=-1; for(var _ic=0;_ic<H.length;_ic++){ if(norm(H[_ic]).indexOf('CONV')>=0){ iConv=_ic; break; } }
     if(iProm<0)return;
     var byKey={}; window.JUN_DATA.rawData.forEach(function(r){ byKey[norm(r.p)]=r; });
     var supFF='', totPF=0,totA=0,totPME=0,totV=0,totMeta=0, found={}, metaSup={};
